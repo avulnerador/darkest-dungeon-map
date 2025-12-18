@@ -1,0 +1,5 @@
+{
+  "name": "Dungeon Weaver - Procedural Map Generator",
+  "description": "Um gerador de dungeons procedurais estilo Darkest Dungeon com edição de grafos, drag-and-drop e exportação de alta qualidade.",
+  "requestFramePermissions": []
+}
