@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DungeonCanvas from '../components/DungeonCanvas';
 import { Dungeon } from '../types';
 import { useDungeonSync } from '../hooks/useDungeonSync';
@@ -7,7 +7,19 @@ import { useDungeonSync } from '../hooks/useDungeonSync';
 const PlayerView: React.FC = () => {
   const [dungeon, setDungeon] = useState<Dungeon | null>(null);
 
-  // Ouve atualizações vindas da aba do Mestre
+  // Ao montar, tenta pegar o estado ativo do storage para visualização imediata
+  useEffect(() => {
+    const activeState = localStorage.getItem('dungeon_weaver_active_state');
+    if (activeState) {
+      try {
+        setDungeon(JSON.parse(activeState));
+      } catch (e) {
+        console.error("Falha ao carregar estado inicial do jogador");
+      }
+    }
+  }, []);
+
+  // Ouve atualizações em tempo real vindas da aba do Mestre
   useDungeonSync((updatedDungeon) => {
     setDungeon(updatedDungeon);
   });

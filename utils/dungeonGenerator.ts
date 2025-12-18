@@ -29,8 +29,8 @@ export const generateProceduralDungeon = (config: GeneratorConfig, theme: Dungeo
   const rooms: Room[] = [];
   const connections: Connection[] = [];
   
-  const TILE_SPACING_X = 16; 
-  const TILE_SPACING_Y = 12;
+  const TILE_SPACING_X = 14; 
+  const TILE_SPACING_Y = 10;
   const layers = Math.max(3, Math.floor(config.complexity / 2));
 
   const startRoom: Room = {
@@ -69,7 +69,7 @@ export const generateProceduralDungeon = (config: GeneratorConfig, theme: Dungeo
 
     currentLayerRooms.forEach((curr, idx) => {
       const parent = prevLayerRooms[idx % prevLayerRooms.length];
-      connections.push(createConnection(parent, curr, rng));
+      connections.push(createConnection(parent, curr, rng, rooms));
     });
 
     prevLayerRooms = currentLayerRooms;
@@ -78,48 +78,42 @@ export const generateProceduralDungeon = (config: GeneratorConfig, theme: Dungeo
   return { rooms, connections };
 };
 
-function createConnection(from: Room, to: Room, rng: PRNG): Connection {
+function createConnection(from: Room, to: Room, rng: PRNG, allRooms: Room[]): Connection {
   const segments: CorridorSegment[] = [];
   
-  // Caminho Horizontal
-  for (let x = from.gridX + 1; x <= to.gridX; x++) {
+  for (let x = Math.min(from.gridX, to.gridX); x <= Math.max(from.gridX, to.gridX); x++) {
     segments.push({
       id: `seg-h-${from.id}-${to.id}-${x}`,
       gridX: x,
       gridY: from.gridY,
-      encounter: rng.next() > 0.88 ? 'BATTLE' : 'NONE',
+      encounter: rng.next() > 0.9 ? 'BATTLE' : 'NONE',
       revealed: false
     });
   }
 
-  // Caminho Vertical (até o destino Y)
-  const xJoint = to.gridX;
-  const startY = from.gridY;
-  const endY = to.gridY;
-  const stepY = startY < endY ? 1 : -1;
-
-  if (startY !== endY) {
-    let currentY = startY + stepY;
-    while (currentY !== endY + stepY) {
-      segments.push({
-        id: `seg-v-${from.id}-${to.id}-${currentY}`,
-        gridX: xJoint,
-        gridY: currentY,
-        encounter: rng.next() > 0.92 ? 'TRAP' : 'NONE',
-        revealed: false
-      });
-      currentY += stepY;
-    }
+  const startY = Math.min(from.gridY, to.gridY);
+  const endY = Math.max(from.gridY, to.gridY);
+  for (let y = startY; y <= endY; y++) {
+    segments.push({
+      id: `seg-v-${from.id}-${to.id}-${y}`,
+      gridX: to.gridX,
+      gridY: y,
+      encounter: rng.next() > 0.9 ? 'TRAP' : 'NONE',
+      revealed: false
+    });
   }
 
-  // Filtrar segmentos que estão dentro da área ocupada pela sala (buffer de 1.5 grid units)
+  // Aumentamos o buffer para 1.5 para garantir que o corredor nem encoste nas bordas visuais (64px)
   return { 
     fromId: from.id, 
     toId: to.id, 
     segments: segments.filter(s => {
-      const isOverFrom = Math.abs(s.gridX - from.gridX) <= 1 && Math.abs(s.gridY - from.gridY) <= 1;
-      const isOverTo = Math.abs(s.gridX - to.gridX) <= 1 && Math.abs(s.gridY - to.gridY) <= 1;
-      return !isOverFrom && !isOverTo;
+      return !allRooms.some(r => {
+        const dx = s.gridX - r.gridX;
+        const dy = s.gridY - r.gridY;
+        const distSq = dx*dx + dy*dy;
+        return distSq < 2.25; // 1.5 * 1.5
+      });
     }) 
   };
 }

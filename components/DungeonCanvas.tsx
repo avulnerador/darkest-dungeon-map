@@ -18,11 +18,27 @@ interface DungeonCanvasProps {
 
 const CELL_SIZE = 40;
 
-const GenericIcon = ({ char, size = 18 }: { char: string, size?: number }) => (
-  <div style={{ fontSize: size }} className="font-bold flex items-center justify-center leading-none select-none">
-    {char}
-  </div>
-);
+const GenericIcon = ({ char, size = 18 }: { char: string, size?: number }) => {
+  // Se o input for um código hex (ex: f523), renderiza via Font Awesome
+  const isHex = /^[0-9a-fA-F]{4}$/.test(char);
+  
+  if (isHex) {
+    return (
+      <i 
+        className="fa-solid font-fa flex items-center justify-center leading-none select-none"
+        style={{ fontSize: size }}
+      >
+        {String.fromCharCode(parseInt(char, 16))}
+      </i>
+    );
+  }
+
+  return (
+    <div style={{ fontSize: size }} className="font-bold flex items-center justify-center leading-none select-none">
+      {char}
+    </div>
+  );
+};
 
 const DungeonCanvas: React.FC<DungeonCanvasProps> = ({ dungeon, setDungeon, isMasterMode, onEditRoom, onEditSegment, onToggleRoom, onToggleSegment, customEncounters }) => {
   const [viewState, setViewState] = useState({ x: 200, y: window.innerHeight / 2, scale: 0.8 });
@@ -110,67 +126,73 @@ const DungeonCanvas: React.FC<DungeonCanvasProps> = ({ dungeon, setDungeon, isMa
         style={{ transform: `translate(${viewState.x}px, ${viewState.y}px) scale(${viewState.scale})` }}
       >
         <div className="relative pointer-events-auto">
-          {dungeon.connections.map(conn => (
-            <React.Fragment key={`${conn.fromId}-${conn.toId}`}>
-              {conn.segments.map(seg => {
-                const isVisible = isMasterMode || seg.revealed;
-                if (!isVisible) return null;
-                return (
-                  <div
-                    key={seg.id}
-                    onClick={(e) => { if (isMasterMode && e.ctrlKey) onToggleSegment(`${conn.fromId}-${conn.toId}`, seg.id); }}
-                    onMouseEnter={(e) => isMasterMode && setHoveredElement({ x: e.clientX, y: e.clientY, content: `Evento: ${seg.encounter || 'Vazio'}` })}
-                    onMouseLeave={() => setHoveredElement(null)}
-                    onContextMenu={(e) => { e.preventDefault(); if (isMasterMode) onEditSegment(`${conn.fromId}-${conn.toId}`, seg.id); }}
-                    className={`absolute w-[30px] h-[30px] border flex items-center justify-center transition-all ${seg.revealed ? 'opacity-100' : ''} ${isMasterMode ? 'cursor-help' : ''}`}
-                    style={{ 
-                      left: seg.gridX * CELL_SIZE - 15, 
-                      top: seg.gridY * CELL_SIZE - 15,
-                      backgroundColor: theme.corridor,
-                      borderColor: seg.revealed ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)',
-                      opacity: seg.revealed ? 1 : theme.masterModeOpacity,
-                      borderStyle: seg.revealed ? 'solid' : 'dashed'
-                    }}
-                  >
-                    <div className="flex items-center justify-center">{renderEncounterIcon(seg.encounter)}</div>
-                  </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
+          {/* Camada de Corredores (Z-Index Inferior) */}
+          <div className="relative z-0">
+            {dungeon.connections.map(conn => (
+              <React.Fragment key={`${conn.fromId}-${conn.toId}`}>
+                {conn.segments.map(seg => {
+                  const isVisible = isMasterMode || seg.revealed;
+                  if (!isVisible) return null;
+                  return (
+                    <div
+                      key={seg.id}
+                      onClick={(e) => { if (isMasterMode && e.ctrlKey) onToggleSegment(`${conn.fromId}-${conn.toId}`, seg.id); }}
+                      onMouseEnter={(e) => isMasterMode && setHoveredElement({ x: e.clientX, y: e.clientY, content: `Evento: ${seg.encounter || 'Vazio'}` })}
+                      onMouseLeave={() => setHoveredElement(null)}
+                      onContextMenu={(e) => { e.preventDefault(); if (isMasterMode) onEditSegment(`${conn.fromId}-${conn.toId}`, seg.id); }}
+                      className={`absolute w-[30px] h-[30px] border flex items-center justify-center transition-all ${seg.revealed ? 'opacity-100' : ''} ${isMasterMode ? 'cursor-help' : ''}`}
+                      style={{ 
+                        left: seg.gridX * CELL_SIZE - 15, 
+                        top: seg.gridY * CELL_SIZE - 15,
+                        backgroundColor: theme.corridor,
+                        borderColor: seg.revealed ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)',
+                        opacity: seg.revealed ? 1 : theme.masterModeOpacity,
+                        borderStyle: seg.revealed ? 'solid' : 'dashed'
+                      }}
+                    >
+                      <div className="flex items-center justify-center">{renderEncounterIcon(seg.encounter)}</div>
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
 
-          {dungeon.rooms.map(room => {
-            const isVisible = isMasterMode || room.revealed;
-            if (!isVisible) return null;
-            return (
-              <div
-                key={room.id}
-                onClick={(e) => { if (isMasterMode && e.ctrlKey) onToggleRoom(room.id); }}
-                onMouseEnter={(e) => isMasterMode && setHoveredElement({ x: e.clientX, y: e.clientY, content: `Sala: ${room.label}\nHostilidades: ${room.enemies?.join(', ') || 'Nenhuma'}` })}
-                onMouseLeave={() => setHoveredElement(null)}
-                onContextMenu={(e) => { e.preventDefault(); if (isMasterMode) onEditRoom(room.id); }}
-                className={`absolute w-[64px] h-[64px] border-4 flex items-center justify-center transition-all z-20 group ${isMasterMode ? 'cursor-pointer' : ''}`}
-                style={{ 
-                  left: room.gridX * CELL_SIZE - 32, 
-                  top: room.gridY * CELL_SIZE - 32,
-                  backgroundColor: theme.roomBg,
-                  borderColor: room.revealed ? theme.primary : `${theme.primary}55`,
-                  opacity: room.revealed ? 1 : theme.masterModeOpacity,
-                  borderStyle: room.revealed ? 'solid' : 'dashed',
-                  boxShadow: room.revealed ? `0 0 40px rgba(0,0,0,0.6), inset 0 0 10px ${theme.primary}33` : 'none'
-                }}
-              >
-                {room.revealed ? renderRoomIcon(room.type) : <Lock size={20} className="text-stone-700" />}
-                
-                <div 
-                  className="absolute -top-7 whitespace-nowrap text-[9px] uppercase tracking-widest font-bold font-cinzel text-center pointer-events-none w-[180px]"
-                  style={{ color: room.revealed ? theme.text : '#444' }}
+          {/* Camada de Salas (Z-Index Superior) */}
+          <div className="relative z-10">
+            {dungeon.rooms.map(room => {
+              const isVisible = isMasterMode || room.revealed;
+              if (!isVisible) return null;
+              return (
+                <div
+                  key={room.id}
+                  onClick={(e) => { if (isMasterMode && e.ctrlKey) onToggleRoom(room.id); }}
+                  onMouseEnter={(e) => isMasterMode && setHoveredElement({ x: e.clientX, y: e.clientY, content: `Sala: ${room.label}\nHostilidades: ${room.enemies?.join(', ') || 'Nenhuma'}` })}
+                  onMouseLeave={() => setHoveredElement(null)}
+                  onContextMenu={(e) => { e.preventDefault(); if (isMasterMode) onEditRoom(room.id); }}
+                  className={`absolute w-[64px] h-[64px] border-4 flex items-center justify-center transition-all group ${isMasterMode ? 'cursor-pointer' : ''}`}
+                  style={{ 
+                    left: room.gridX * CELL_SIZE - 32, 
+                    top: room.gridY * CELL_SIZE - 32,
+                    backgroundColor: theme.roomBg, 
+                    borderColor: room.revealed ? theme.primary : `${theme.primary}55`,
+                    opacity: room.revealed ? 1 : theme.masterModeOpacity,
+                    borderStyle: room.revealed ? 'solid' : 'dashed',
+                    boxShadow: room.revealed ? `0 0 40px rgba(0,0,0,0.8), inset 0 0 15px ${theme.primary}22` : 'none'
+                  }}
                 >
-                  {room.label}
+                  {room.revealed ? renderRoomIcon(room.type) : <Lock size={20} className="text-stone-700" />}
+                  
+                  <div 
+                    className="absolute -top-7 whitespace-nowrap text-[9px] uppercase tracking-widest font-bold font-cinzel text-center pointer-events-none w-[180px]"
+                    style={{ color: room.revealed ? theme.text : '#444' }}
+                  >
+                    {room.label}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 

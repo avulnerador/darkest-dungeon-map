@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Eye, EyeOff, PlusCircle, ExternalLink } from 'lucide-react';
+import * as htmlToImage from 'html-to-image';
 import DungeonCanvas from '../components/DungeonCanvas';
 import Sidebar from '../components/Sidebar';
 import RoomModal from '../components/RoomModal';
@@ -44,6 +45,7 @@ const MasterView: React.FC = () => {
   const [hostilities, setHostilities] = useState<string[]>(['Esqueleto', 'Culti', 'Aranha', 'Wraith']);
   const [customEncounters, setCustomEncounters] = useState<CustomEncounter[]>([]);
   const [myMaps, setMyMaps] = useState<Dungeon[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
   
   const { broadcastDungeon } = useDungeonSync();
 
@@ -52,16 +54,26 @@ const MasterView: React.FC = () => {
     if (saved) {
       const parsed = JSON.parse(saved);
       setMyMaps(parsed);
-      if (parsed.length > 0) setDungeon(parsed[0]);
+      if (parsed.length > 0) {
+        const lastDungeon = parsed[0];
+        setDungeon(lastDungeon);
+        setTheme(lastDungeon.theme || DEFAULT_THEME);
+      }
     }
   }, []);
 
-  // Sincronizar sempre que a masmorra mudar
+  useEffect(() => {
+    if (dungeon && JSON.stringify(dungeon.theme) !== JSON.stringify(theme)) {
+      setDungeon(prev => prev ? { ...prev, theme } : null);
+    }
+  }, [theme]);
+
   useEffect(() => {
     if (dungeon) {
       broadcastDungeon(dungeon);
       const updatedHistory = [dungeon, ...myMaps.filter(m => m.id !== dungeon.id)].slice(0, 15);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory));
+      localStorage.setItem('dungeon_weaver_active_state', JSON.stringify(dungeon));
     }
   }, [dungeon, broadcastDungeon]);
 
@@ -81,8 +93,29 @@ const MasterView: React.FC = () => {
     setMyMaps(prev => [newDungeon, ...prev.filter(m => m.id !== newDungeon.id)].slice(0, 15));
   };
 
+  const handleExportPNG = async () => {
+    const node = document.getElementById('dungeon-inner-canvas');
+    if (!node || isExporting) return;
+    
+    setIsExporting(true);
+    try {
+      const dataUrl = await htmlToImage.toPng(node, {
+        backgroundColor: theme.bg,
+        quality: 1.0,
+        pixelRatio: 2
+      });
+      const link = document.createElement('a');
+      link.download = `${dungeon?.name || 'masmorra'}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Falha na exportação:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleOpenPlayer = () => {
-    // Usando HashRouter, o link correto deve incluir o '#'
     window.open('/#/player', '_blank');
   };
 
@@ -95,7 +128,7 @@ const MasterView: React.FC = () => {
         hostilities={hostilities} setHostilities={setHostilities}
         customEncounters={customEncounters} setCustomEncounters={setCustomEncounters}
         onGenerate={handleGenerate}
-        onExportPNG={() => {}} // Reaproveitado no canvas interno
+        onExportPNG={handleExportPNG} 
         isMasterMode={isMasterMode} setIsMasterMode={setIsMasterMode}
         history={myMaps} 
         onLoadMap={(d) => { setDungeon(d); setTheme(d.theme); }}
@@ -125,6 +158,11 @@ const MasterView: React.FC = () => {
         </header>
 
         <div className="flex-1 relative overflow-hidden">
+          {isExporting && (
+            <div className="absolute inset-0 z-[100] bg-black/80 flex items-center justify-center">
+              <p className="font-cinzel text-xl animate-pulse tracking-widest uppercase" style={{ color: theme.primary }}>Gerando Atlas...</p>
+            </div>
+          )}
           {dungeon ? (
             <DungeonCanvas 
               dungeon={dungeon} 
